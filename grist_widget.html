@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quản Lý Dự Án</title>
+<!-- Grist Plugin API - BẮT BUỘC phải có -->
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #f8f7f4; --surface: #fff; --surface2: #f1f0eb;
+  --border: rgba(0,0,0,0.10); --border2: rgba(0,0,0,0.18);
+  --text: #1a1a18; --text2: #5f5e5a; --text3: #9c9a92;
+  --blue: #185FA5; --blue-bg: #E6F1FB;
+  --green: #0F6E56; --green-bg: #E1F5EE;
+  --amber: #854F0B; --amber-bg: #FAEEDA;
+  --red: #993C1D; --red-bg: #FAECE7;
+  --gray-bg: #F1EFE8;
+  --radius: 10px; --radius-sm: 6px;
+}
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); font-size: 14px; }
+
+/* SETUP SCREEN */
+.setup-screen {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px; text-align: center;
+}
+.setup-box {
+  background: var(--surface); border: 0.5px solid var(--border2);
+  border-radius: var(--radius); padding: 28px 32px; max-width: 440px; width: 100%;
+}
+.setup-icon { font-size: 32px; margin-bottom: 12px; }
+.setup-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
+.setup-desc { font-size: 13px; color: var(--text2); line-height: 1.6; margin-bottom: 20px; }
+.setup-steps { text-align: left; background: var(--surface2); border-radius: var(--radius-sm); padding: 14px 16px; margin-bottom: 20px; }
+.setup-steps p { font-size: 12px; color: var(--text2); line-height: 1.8; }
+.setup-steps code { background: rgba(0,0,0,0.07); padding: 1px 5px; border-radius: 3px; font-family: monospace; font-size: 11px; }
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border-radius: var(--radius-sm); border: 0.5px solid var(--border2); background: var(--surface); color: var(--text); font-size: 13px; cursor: pointer; font-family: inherit; transition: all .15s; }
+.btn:hover { background: var(--surface2); }
+.btn-primary { background: var(--text); color: var(--surface); border-color: transparent; }
+.btn-primary:hover { opacity: 0.85; background: var(--text); }
+
+/* CONFIG MODAL */
+.modal-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 200; align-items: center; justify-content: center; }
+.modal-overlay.open { display: flex; }
+.modal { background: var(--surface); border-radius: var(--radius); padding: 24px; width: 480px; max-width: 95vw; }
+.modal-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; }
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; }
+.field input { padding: 7px 10px; border: 0.5px solid var(--border2); border-radius: var(--radius-sm); font-size: 13px; font-family: inherit; outline: none; }
+.field input:focus { border-color: var(--blue); }
+.hint { font-size: 11px; color: var(--text3); background: var(--surface2); border-radius: var(--radius-sm); padding: 8px 10px; margin-bottom: 14px; line-height: 1.6; }
+.hint code { background: rgba(0,0,0,0.07); padding: 1px 4px; border-radius: 3px; font-family: monospace; font-size: 10px; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* MAIN APP */
+.app { display: none; flex-direction: column; height: 100vh; }
+.app.visible { display: flex; }
+
+/* TOPBAR */
+.topbar { background: var(--surface); border-bottom: 0.5px solid var(--border); padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.topbar-title { font-size: 13px; font-weight: 600; flex: 1; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text3); }
+.dot.ok { background: #1D9E75; }
+.dot.err { background: #D85A30; }
+.status-txt { font-size: 12px; color: var(--text2); }
+.badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; border: 0.5px solid var(--border); color: var(--text2); background: var(--surface2); }
+
+/* STATS */
+.stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; padding: 12px 16px; flex-shrink: 0; }
+.stat { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); padding: 10px 14px; }
+.stat-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.stat-val { font-size: 22px; font-weight: 600; line-height: 1; margin-bottom: 2px; }
+.stat-sub { font-size: 11px; color: var(--text2); }
+
+/* CONTENT */
+.content { display: grid; grid-template-columns: 1.4fr 1fr; gap: 12px; padding: 0 16px 16px; flex: 1; min-height: 0; }
+.panel { background: var(--surface); border: 0.5px solid var(--border); border-radius: var(--radius); display: flex; flex-direction: column; overflow: hidden; }
+.panel-head { padding: 10px 14px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.panel-head-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .04em; flex: 1; }
+.toolbar { padding: 8px 12px; border-bottom: 0.5px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+.search { flex: 1; padding: 6px 10px; border: 0.5px solid var(--border); border-radius: var(--radius-sm); font-size: 12px; font-family: inherit; background: var(--surface2); outline: none; }
+.search:focus { border-color: var(--blue); background: var(--surface); }
+.tabs { display: flex; gap: 3px; }
+.tab { padding: 4px 10px; border-radius: 20px; font-size: 11px; cursor: pointer; border: 0.5px solid var(--border2); background: transparent; color: var(--text2); font-family: inherit; transition: all .12s; }
+.tab.active { background: var(--text); color: var(--surface); border-color: transparent; }
+
+/* PROJECT LIST */
+.proj-list { flex: 1; overflow-y: auto; }
+.proj-row { display: grid; grid-template-columns: 1fr 80px 36px 78px; gap: 8px; align-items: center; padding: 9px 14px; border-bottom: 0.5px solid var(--border); cursor: pointer; transition: background .1s; }
+.proj-row:last-child { border-bottom: none; }
+.proj-row:hover { background: var(--surface2); }
+.proj-row.active { background: var(--blue-bg); border-left: 2.5px solid var(--blue); }
+.proj-name { font-size: 12px; font-weight: 500; line-height: 1.3; }
+.proj-sub { font-size: 11px; color: var(--text3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { display: inline-flex; font-size: 10px; font-weight: 500; padding: 2px 7px; border-radius: 8px; white-space: nowrap; }
+.chip-blue { background: var(--blue-bg); color: var(--blue); }
+.chip-green { background: var(--green-bg); color: var(--green); }
+.chip-amber { background: var(--amber-bg); color: var(--amber); }
+.chip-red { background: var(--red-bg); color: var(--red); }
+.chip-gray { background: var(--gray-bg); color: #5f5e5a; }
+.n-tasks { font-size: 12px; font-weight: 600; color: var(--text2); text-align: center; }
+.prog-cell { display: flex; align-items: center; gap: 5px; }
+.prog-bar { flex: 1; height: 4px; border-radius: 2px; background: var(--surface2); overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 2px; }
+.fill-green { background: #1D9E75; } .fill-amber { background: #EF9F27; }
+.fill-red { background: #D85A30; } .fill-gray { background: #B4B2A9; }
+.prog-pct { font-size: 10px; min-width: 28px; text-align: right; color: var(--text2); }
+.prog-pct.over { color: var(--red); font-weight: 600; }
+
+/* TASK PANEL */
+.task-scroll { flex: 1; overflow-y: auto; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.no-sel { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text3); font-size: 13px; gap: 10px; }
+.task-card { border: 0.5px solid var(--border); border-radius: 8px; overflow: hidden; }
+.task-head { padding: 9px 11px; display: flex; align-items: flex-start; gap: 7px; border-bottom: 0.5px solid var(--border); }
+.tnum { width: 20px; height: 20px; border-radius: 50%; background: var(--text); color: var(--surface); font-size: 10px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; margin-top: 1px; }
+.ttitle { font-size: 12px; font-weight: 500; flex: 1; line-height: 1.4; }
+.prio { font-size: 9px; font-weight: 600; padding: 2px 6px; border-radius: 6px; background: var(--red-bg); color: var(--red); flex-shrink: 0; }
+.pct-badge { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 6px; flex-shrink: 0; }
+.pct-done { background: var(--green-bg); color: var(--green); }
+.pct-mid { background: var(--amber-bg); color: var(--amber); }
+.pct-low { background: var(--gray-bg); color: #5f5e5a; }
+.task-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 7px 11px; }
+.meta-lbl { font-size: 10px; color: var(--text3); text-transform: uppercase; letter-spacing: .03em; }
+.meta-val { font-size: 11px; font-weight: 500; display: flex; align-items: center; gap: 4px; margin-top: 2px; }
+.avatar { width: 16px; height: 16px; border-radius: 50%; font-size: 8px; font-weight: 600; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.mini-prog { padding: 0 11px 8px; display: flex; align-items: center; gap: 7px; }
+.mini-bar { flex: 1; height: 3px; border-radius: 2px; background: var(--surface2); overflow: hidden; }
+
+/* LOADING */
+.loading { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; gap: 10px; color: var(--text3); font-size: 12px; }
+.spinner { width: 24px; height: 24px; border: 2px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { display: flex; align-items: center; justify-content: center; height: 80px; color: var(--text3); font-size: 12px; }
+
+/* SCROLLBAR */
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+/* NOTIF */
+.notif { position: fixed; bottom: 16px; right: 16px; background: var(--text); color: var(--surface); padding: 9px 14px; border-radius: 8px; font-size: 12px; z-index: 999; transform: translateY(60px); opacity: 0; transition: all .25s; max-width: 280px; }
+.notif.show { transform: translateY(0); opacity: 1; }
+.notif.ok { background: #0F6E56; } .notif.err { background: #993C1D; }
+</style>
+</head>
+<body>
+
+<!-- SETUP SCREEN (hiện lần đầu nếu chưa cấu hình) -->
+<div class="setup-screen" id="setupScreen">
+  <div class="setup-box">
+    <div class="setup-icon">📋</div>
+    <div class="setup-title">Dashboard Quản Lý Dự Án</div>
+    <div class="setup-desc">Widget này đọc dữ liệu trực tiếp từ bảng Grist của bạn. Cần cấu hình tên cột một lần duy nhất.</div>
+    <div class="setup-steps">
+      <p>
+        <strong>Cách thêm widget này vào Grist:</strong><br>
+        1. Trong trang Grist → click <code>Add New</code> → <code>Add Widget to Page</code><br>
+        2. Chọn <code>Custom</code> → mục <strong>Custom URL</strong><br>
+        3. Dán URL của file HTML này vào<br>
+        4. Chọn bảng dữ liệu cần hiển thị<br>
+        5. Nhấn nút bên dưới để cấu hình tên cột
+      </p>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:center">
+      <button class="btn btn-primary" onclick="openConfig()">Cấu hình tên cột</button>
+      <button class="btn" onclick="startDemo()">Xem demo trước</button>
+    </div>
+  </div>
+</div>
+
+<!-- CONFIG MODAL -->
+<div class="modal-overlay" id="configModal">
+  <div class="modal">
+    <div class="modal-title">⚙️ Cấu hình tên cột</div>
+    <div class="hint">
+      Điền <strong>đúng tên cột</strong> trong bảng Grist của bạn (phân biệt hoa/thường).<br>
+      Ví dụ cột tên dự án trong Grist tên là <code>Project_Name</code> thì điền <code>Project_Name</code>.
+    </div>
+    <div class="field-grid">
+      <div class="field"><label>Tên dự án</label><input id="fName" placeholder="Project_Name" value="Project_Name"></div>
+      <div class="field"><label>Loại công việc</label><input id="fType" placeholder="Task_Type" value="Task_Type"></div>
+      <div class="field"><label>Tiến độ (%)</label><input id="fProg" placeholder="Progress" value="Progress"></div>
+      <div class="field"><label>Người phụ trách</label><input id="fPC" placeholder="PC" value="PC"></div>
+      <div class="field"><label>Ưu tiên</label><input id="fPrio" placeholder="Priority" value="Priority"></div>
+      <div class="field"><label>Ngày bắt đầu</label><input id="fStart" placeholder="Start_Date" value="Start_Date"></div>
+      <div class="field"><label>Ngày kết thúc</label><input id="fEnd" placeholder="Finish_Date" value="Finish_Date"></div>
+      <div class="field"><label>Nhiệm vụ / Task</label><input id="fTask" placeholder="Task" value="Task"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeConfig()">Hủy</button>
+      <button class="btn btn-primary" onclick="saveConfig()">Lưu & Áp dụng</button>
+    </div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="topbar-title">📊 Quản Lý Dự Án Kỹ Thuật</div>
+    <div class="dot" id="dot"></div>
+    <span class="status-txt" id="statusTxt">Đang kết nối...</span>
+    <button class="btn" onclick="openConfig()" style="padding:5px 10px;font-size:12px">⚙️ Cột</button>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="stat-lbl">Tổng</div><div class="stat-val" id="sTotal">—</div><div class="stat-sub" id="sTotal2">dự án</div></div>
+    <div class="stat"><div class="stat-lbl">Đang làm</div><div class="stat-val" id="sInprog" style="color:var(--blue)">—</div><div class="stat-sub">0 < % < 100</div></div>
+    <div class="stat"><div class="stat-lbl">Vượt tiến độ</div><div class="stat-val" id="sOver" style="color:var(--red)">—</div><div class="stat-sub">trên 100%</div></div>
+    <div class="stat"><div class="stat-lbl">Hoàn thành</div><div class="stat-val" id="sDone" style="color:var(--green)">—</div><div class="stat-sub">đạt 100%</div></div>
+  </div>
+
+  <div class="content">
+    <!-- LEFT -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-head-title">Danh sách dự án</span>
+        <span class="badge" id="projBadge">0</span>
+      </div>
+      <div class="toolbar">
+        <input class="search" id="searchBox" type="text" placeholder="🔍 Tìm dự án..." oninput="render()">
+        <div class="tabs">
+          <button class="tab active" onclick="setTab(this,'all')">Tất cả</button>
+          <button class="tab" onclick="setTab(this,'inprog')">Đang làm</button>
+          <button class="tab" onclick="setTab(this,'done')">Xong</button>
+          <button class="tab" onclick="setTab(this,'over')">Vượt %</button>
+        </div>
+      </div>
+      <div class="proj-list" id="projList"><div class="loading"><div class="spinner"></div>Đang tải...</div></div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="panel">
+      <div class="panel-head">
+        <span class="panel-head-title" id="taskTitle">Chọn dự án</span>
+        <span class="badge" id="taskBadge">0</span>
+      </div>
+      <div class="task-scroll" id="taskScroll">
+        <div class="no-sel">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+          Chọn một dự án để xem nhiệm vụ
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notif" id="notif"></div>
+
+<script>
+// =================== CONFIG ===================
+let cfg = {
+  fName:'Project_Name', fType:'Task_Type', fProg:'Progress',
+  fPC:'PC', fPrio:'Priority', fStart:'Start_Date', fEnd:'Finish_Date', fTask:'Task'
+};
+let rows = [];       // tất cả records từ Grist
+let selId = null;
+let curTab = 'all';
+let isDemo = false;
+
+function loadCfg() {
+  try { const s = localStorage.getItem('dash_cfg'); if(s) cfg = {...cfg,...JSON.parse(s)}; } catch(e){}
+  document.getElementById('fName').value = cfg.fName;
+  document.getElementById('fType').value = cfg.fType;
+  document.getElementById('fProg').value = cfg.fProg;
+  document.getElementById('fPC').value   = cfg.fPC;
+  document.getElementById('fPrio').value = cfg.fPrio;
+  document.getElementById('fStart').value= cfg.fStart;
+  document.getElementById('fEnd').value  = cfg.fEnd;
+  document.getElementById('fTask').value = cfg.fTask;
+}
+function saveConfig() {
+  cfg.fName  = document.getElementById('fName').value.trim();
+  cfg.fType  = document.getElementById('fType').value.trim();
+  cfg.fProg  = document.getElementById('fProg').value.trim();
+  cfg.fPC    = document.getElementById('fPC').value.trim();
+  cfg.fPrio  = document.getElementById('fPrio').value.trim();
+  cfg.fStart = document.getElementById('fStart').value.trim();
+  cfg.fEnd   = document.getElementById('fEnd').value.trim();
+  cfg.fTask  = document.getElementById('fTask').value.trim();
+  localStorage.setItem('dash_cfg', JSON.stringify(cfg));
+  closeConfig();
+  showNotif('✓ Đã lưu cấu hình','ok');
+  render();
+}
+function openConfig()  { loadCfg(); document.getElementById('configModal').classList.add('open'); }
+function closeConfig() { document.getElementById('configModal').classList.remove('open'); }
+
+// =================== GRIST API ===================
+function initGrist() {
+  if (typeof grist === 'undefined') {
+    // Không chạy trong Grist → hiện setup screen
+    document.getElementById('setupScreen').style.display = 'flex';
+    return;
+  }
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+
+  grist.ready({ requiredAccess: 'read table' });
+
+  // Lắng nghe data thay đổi realtime
+  grist.onRecords(function(records) {
+    rows = records;
+    setStatus('ok', 'Đã kết nối · ' + records.length + ' dòng');
+    render();
+    showNotif('✓ Tải ' + records.length + ' dòng','ok');
+  });
+
+  grist.onRecord(function(record) {
+    // Khi user click 1 dòng trong Grist → tự động chọn dự án đó
+    if (record && record.id) {
+      selId = record.id;
+      renderTasks();
+      highlightRow(record.id);
+    }
+  });
+}
+
+// =================== DEMO DATA ===================
+function startDemo() {
+  isDemo = true;
+  document.getElementById('setupScreen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  rows = [
+    {id:1, Project_Name:'CTMV Liên Hợp KH – Biwase Phú Quốc', Task_Type:'Lập báo giá, CPVH', Progress:256, PC:'Nguyễn Văn Hiệu', Priority:'HIGH', Task:'Bổ sung phương án kỹ thuật RO tăng tỉ lệ thu hồi', Start_Date:'22-01-2026', Finish_Date:''},
+    {id:2, Project_Name:'Cetric – HT Ro XL Nước Rỉ Rác', Task_Type:'Mua hàng vật tư', Progress:156, PC:'Nhóm TECH', Priority:'', Task:'Đề xuất mua hàng vật tư, ống & vật tư cơ khí', Start_Date:'', Finish_Date:'15-03-2026'},
+    {id:3, Project_Name:'Urenco – HTXL Nước Thải Nguy Hại', Task_Type:'Đề xuất công nghệ', Progress:106, PC:'Nhóm TECH', Priority:'', Task:'Đề xuất công nghệ sơ bộ xử lý nước thải nguy hại', Start_Date:'', Finish_Date:''},
+    {id:4, Project_Name:'Cetric – Bản vẽ thiết kế thi công', Task_Type:'Thiết kế', Progress:75, PC:'Nhóm TECH', Priority:'', Task:'Bản vẽ thiết kế thi công hệ thống lọc màng', Start_Date:'', Finish_Date:''},
+    {id:5, Project_Name:'Kumho – Bản vẽ kỹ thuật', Task_Type:'Kỹ thuật', Progress:80, PC:'Nhóm TECH', Priority:'', Task:'Bản vẽ kỹ thuật tổng thể dự án', Start_Date:'', Finish_Date:''},
+    {id:6, Project_Name:'Vietstar – Nâng cấp HTXL', Task_Type:'Lập báo giá, CPVH', Progress:100, PC:'Nguyễn Văn Mạnh', Priority:'HIGH', Task:'Lập báo giá nâng cấp hệ thống xử lý nước rỉ', Start_Date:'16-03-2026', Finish_Date:'02-04-2026'},
+    {id:7, Project_Name:'Ngôi Sao Xanh – Nâng cấp HTXL', Task_Type:'Thi công', Progress:100, PC:'Nhóm TECH', Priority:'', Task:'Trình bản vẽ thi công hoàn chỉnh', Start_Date:'', Finish_Date:''},
+    {id:8, Project_Name:'Biwase – HTXL Nước Rỉ Rác', Task_Type:'Họp trình', Progress:100, PC:'Nhóm TECH', Priority:'', Task:'Họp trình kết quả dự án', Start_Date:'', Finish_Date:''},
+    {id:9, Project_Name:'TIPA – TMKT', Task_Type:'TMKT', Progress:20, PC:'Nhóm TECH', Priority:'', Task:'Tiếp thị kỹ thuật khách hàng', Start_Date:'', Finish_Date:''},
+    {id:10, Project_Name:'Đà Lạt Nhất Bản JPD', Task_Type:'Họp trình', Progress:0, PC:'Nhóm TECH', Priority:'', Task:'Chuẩn bị tài liệu họp trình', Start_Date:'', Finish_Date:''},
+  ];
+  setStatus('ok', 'Demo · ' + rows.length + ' dòng');
+  render();
+}
+
+// =================== RENDER ===================
+function getF(row, field) { return row[field] ?? row[cfg[field]] ?? ''; }
+
+function render() {
+  const q = document.getElementById('searchBox').value.toLowerCase();
+  const list = rows.filter(r => {
+    const name = String(r[cfg.fName] || '').toLowerCase();
+    if (q && !name.includes(q)) return false;
+    const p = parseFloat(r[cfg.fProg]) || 0;
+    if (curTab === 'done')   return p === 100;
+    if (curTab === 'inprog') return p > 0 && p < 100;
+    if (curTab === 'over')   return p > 100;
+    return true;
+  });
+
+  document.getElementById('projBadge').textContent = list.length;
+  document.getElementById('sTotal').textContent  = rows.length;
+  document.getElementById('sTotal2').textContent = 'dự án';
+  document.getElementById('sInprog').textContent = rows.filter(r => { const p=parseFloat(r[cfg.fProg])||0; return p>0&&p<100; }).length;
+  document.getElementById('sOver').textContent   = rows.filter(r => (parseFloat(r[cfg.fProg])||0) > 100).length;
+  document.getElementById('sDone').textContent   = rows.filter(r => (parseFloat(r[cfg.fProg])||0) === 100).length;
+
+  if (!list.length) {
+    document.getElementById('projList').innerHTML = '<div class="empty">Không có dự án phù hợp</div>';
+    return;
+  }
+
+  document.getElementById('projList').innerHTML = list.map(r => {
+    const id   = r.id;
+    const name = r[cfg.fName] || `#${id}`;
+    const type = r[cfg.fType] || '';
+    const pct  = parseFloat(r[cfg.fProg]) || 0;
+    const barW = Math.min(pct, 100);
+    const fillCls = pct > 100 ? 'fill-red' : pct === 100 ? 'fill-green' : pct >= 50 ? 'fill-amber' : 'fill-gray';
+    const pctCls  = pct > 100 ? 'over' : '';
+    const chip    = chipClass(type);
+    const act     = selId === id ? 'active' : '';
+    return `<div class="proj-row ${act}" data-id="${id}" onclick="selectProj(${id},this)">
+      <div><div class="proj-name">${esc(name)}</div><div class="proj-sub">${esc(type)}</div></div>
+      <span class="chip ${chip}">${esc(shortType(type))}</span>
+      <div class="n-tasks">${rows.filter(x=>x.id===id).length}</div>
+      <div class="prog-cell">
+        <div class="prog-bar"><div class="prog-fill ${fillCls}" style="width:${barW}%"></div></div>
+        <span class="prog-pct ${pctCls}">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function selectProj(id, el) {
+  selId = id;
+  document.querySelectorAll('.proj-row').forEach(r => r.classList.remove('active'));
+  el.classList.add('active');
+  const row = rows.find(r => r.id === id);
+  if (row) document.getElementById('taskTitle').textContent = truncate(row[cfg.fName]||'', 40);
+  renderTasks();
+
+  // Sync cursor ngược lại Grist nếu đang trong widget
+  if (typeof grist !== 'undefined') grist.setCursorPos({rowId: id});
+}
+
+function highlightRow(id) {
+  document.querySelectorAll('.proj-row').forEach(r => {
+    r.classList.toggle('active', parseInt(r.dataset.id) === id);
+  });
+}
+
+function renderTasks() {
+  // Mỗi row trong Grist = 1 record. Task lấy từ field Task của chính record đó.
+  // Nếu bảng Tasks riêng, cần thêm linked widget.
+  const row = rows.find(r => r.id === selId);
+  document.getElementById('taskBadge').textContent = row ? 1 : 0;
+
+  if (!row) {
+    document.getElementById('taskScroll').innerHTML = `<div class="no-sel"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity=".3"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Chọn một dự án</div>`;
+    return;
+  }
+
+  const pct   = parseFloat(row[cfg.fProg]) || 0;
+  const barW  = Math.min(pct, 100);
+  const fillC = pct >= 100 ? 'fill-green' : pct >= 50 ? 'fill-amber' : 'fill-gray';
+  const pctBg = pct === 100 ? 'pct-done' : pct >= 50 ? 'pct-mid' : 'pct-low';
+  const prioH = row[cfg.fPrio] === 'HIGH' ? `<span class="prio">HIGH</span>` : '';
+  const task  = row[cfg.fTask] || row[cfg.fName] || '';
+  const pc    = row[cfg.fPC] || '';
+  const sd    = row[cfg.fStart] || '';
+  const ed    = row[cfg.fEnd]   || '';
+  const dates = [sd, ed].filter(Boolean).join(' → ');
+  const init  = initials(pc);
+  const avcol = avatarColor(pc);
+  const borderCol = pct >= 100 ? '#1D9E75' : pct >= 50 ? '#EF9F27' : '#B4B2A9';
+
+  document.getElementById('taskScroll').innerHTML = `
+  <div class="task-card" style="border-left:2.5px solid ${borderCol}">
+    <div class="task-head">
+      <div class="tnum">1</div>
+      <div class="ttitle">${esc(task)}</div>
+      ${prioH}
+      <span class="pct-badge ${pctBg}">${pct}%</span>
+    </div>
+    <div class="task-meta">
+      <div><div class="meta-lbl">Người phụ trách</div>
+        <div class="meta-val"><div class="avatar" style="${avcol}">${init}</div>${esc(pc||'—')}</div></div>
+      <div><div class="meta-lbl">Thời gian</div>
+        <div class="meta-val">${esc(dates||'—')}</div></div>
+    </div>
+    <div class="mini-prog">
+      <div class="mini-bar"><div class="mini-fill ${fillC}" style="width:${barW}%"></div></div>
+      <span style="font-size:10px;color:var(--text3)">${pct}%</span>
+    </div>
+  </div>
+
+  <div style="font-size:11px;color:var(--text3);padding:6px 2px;line-height:1.6">
+    💡 Để xem nhiều task hơn: trong Grist, thêm một <strong>Custom Widget thứ 2</strong> liên kết với bảng Tasks (linked by Project ID), widget đó sẽ tự lọc theo dự án đang chọn.
+  </div>`;
+}
+
+// =================== HELPERS ===================
+function setTab(el, t) {
+  curTab = t;
+  document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+  el.classList.add('active');
+  render();
+}
+function setStatus(state, txt) {
+  document.getElementById('dot').className = 'dot ' + state;
+  document.getElementById('statusTxt').textContent = txt;
+}
+function chipClass(t) {
+  if (!t) return 'chip-gray';
+  const s = t.toLowerCase();
+  if (s.includes('báo giá')||s.includes('cpvh')) return 'chip-blue';
+  if (s.includes('thiết kế')||s.includes('kỹ thuật')) return 'chip-blue';
+  if (s.includes('công nghệ')||s.includes('tmkt')) return 'chip-amber';
+  if (s.includes('mua hàng')||s.includes('vật tư')) return 'chip-amber';
+  if (s.includes('thi công')||s.includes('thầu')) return 'chip-red';
+  if (s.includes('họp')||s.includes('trình')) return 'chip-green';
+  return 'chip-gray';
+}
+function shortType(s) {
+  if (!s) return '—';
+  const m = {'lập báo giá':'Báo giá','đề xuất công nghệ':'Công nghệ','đề xuất mua hàng':'Mua hàng','bản vẽ thiết kế':'Thiết kế','bản vẽ kỹ thuật':'Kỹ thuật','trình bản vẽ':'Thi công','tmkt':'TMKT','họp':'Họp','lựa chọn thầu':'Thầu'};
+  const sl = s.toLowerCase();
+  for (const [k,v] of Object.entries(m)) if (sl.includes(k)) return v;
+  return s.slice(0,10);
+}
+function initials(n) {
+  if (!n) return '?';
+  const p = n.trim().split(/\s+/);
+  return p.length >= 2 ? (p[0][0]+p[p.length-1][0]).toUpperCase() : n[0].toUpperCase();
+}
+function avatarColor(n) {
+  const c = ['background:#B5D4F4;color:#185FA5','background:#9FE1CB;color:#0F6E56','background:#F5C4B3;color:#993C1D','background:#FAC775;color:#854F0B','background:#C0DD97;color:#3B6D11','background:#CFC9F3;color:#3C3489'];
+  if (!n) return c[0];
+  let h = 0; for (const ch of n) h = (h*31+ch.charCodeAt(0)) % c.length;
+  return c[h];
+}
+function truncate(s, n) { return s.length > n ? s.slice(0,n)+'…' : s; }
+function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+let notifT;
+function showNotif(msg, type='') {
+  const n = document.getElementById('notif');
+  n.textContent = msg; n.className = 'notif show ' + type;
+  clearTimeout(notifT);
+  notifT = setTimeout(() => n.classList.remove('show'), 3000);
+}
+
+// =================== INIT ===================
+loadCfg();
+initGrist();
+</script>
+</body>
+</html>
